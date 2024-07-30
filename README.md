@@ -10,7 +10,7 @@ _Easy Config Management, add, edit and remove custom game configurations with ea
 
 _Easy Save Backup & Restore._
 
-_Easy to use update system - updates directly from github_
+_Easy to use update system - updates xenia directly from github_
 
 The app allows you to create separate configurations for each game you are emulating.
 
