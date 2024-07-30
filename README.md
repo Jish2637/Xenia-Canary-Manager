@@ -1,5 +1,12 @@
 I have created a save manager for Xenia Canary.
 
+Features:
+Auto launch games - No need to press F9!
+Seperate configs per game.
+Easy Config Management, add, edit and remove custom game configurations with ease.
+Easy Save Backup & Restore.
+
+
 The app allows you to create separate configurations for each game you are emulating.
 
 On first launch it will ask you if you would like to download the latest Xenia App and Game Patches.
