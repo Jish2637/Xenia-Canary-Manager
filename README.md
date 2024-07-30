@@ -4,7 +4,7 @@ I have created a save manager for Xenia Canary.
 
 _Auto launch games - No need to press F9!_
 
-_Seperate configs per game._
+_Separate  configs per game._
 
 _Easy Config Management, add, edit and remove custom game configurations with ease._
 
