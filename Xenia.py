@@ -11,7 +11,8 @@ import time
 import threading
 import pyautogui
 
-from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox, QInputDialog, QLabel, QVBoxLayout, QPushButton, QWidget, QFileDialog, QGridLayout
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QMessageBox, QInputDialog,
+                             QLabel, QVBoxLayout, QPushButton, QWidget, QFileDialog, QGridLayout)
 from PyQt5.QtGui import QPixmap, QPalette, QBrush, QFont
 from PyQt5.QtCore import Qt
 
@@ -21,7 +22,6 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
 logging.info("Starting the application")
 
 # Constants
@@ -43,6 +43,9 @@ class HeaderWidget(QWidget):
 
     def initUI(self):
         self.setFixedHeight(200)  # Set the height of the header
+        self.update_palette()
+
+    def update_palette(self):
         palette = QPalette()
         pixmap = QPixmap(self.image_path)
         scaled_pixmap = pixmap.scaled(self.width(), self.height(), Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
@@ -51,12 +54,7 @@ class HeaderWidget(QWidget):
         self.setAutoFillBackground(True)
 
     def resizeEvent(self, event):
-        # Handle resizing of the header to keep the image properly scaled
-        palette = QPalette()
-        pixmap = QPixmap(self.image_path)
-        scaled_pixmap = pixmap.scaled(self.width(), self.height(), Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
-        palette.setBrush(QPalette.Window, QBrush(scaled_pixmap))
-        self.setPalette(palette)
+        self.update_palette()
 
 class GameItemWidget(QWidget):
     def __init__(self, game, parent=None):
@@ -66,23 +64,16 @@ class GameItemWidget(QWidget):
 
     def initUI(self):
         layout = QVBoxLayout()
-
-        launch_button = QPushButton("Launch", self)
-        launch_button.clicked.connect(self.launch_game)
-        layout.addWidget(launch_button)
-
-        edit_button = QPushButton("Edit Config", self)
-        edit_button.clicked.connect(self.edit_config)
-        layout.addWidget(edit_button)
-
-        remove_button = QPushButton("Remove", self)
-        remove_button.clicked.connect(self.remove_game)
-        layout.addWidget(remove_button)
-
-        open_folder_button = QPushButton("Open Folder", self)
-        open_folder_button.clicked.connect(self.open_folder)
-        layout.addWidget(open_folder_button)
-
+        buttons = [
+            ("Launch", self.launch_game),
+            ("Edit Config", self.edit_config),
+            ("Remove", self.remove_game),
+            ("Open Folder", self.open_folder)
+        ]
+        for text, func in buttons:
+            button = QPushButton(text, self)
+            button.clicked.connect(func)
+            layout.addWidget(button)
         self.setLayout(layout)
 
     def launch_game(self):
@@ -106,20 +97,13 @@ class XeniaManager(QMainWindow):
 
     def initUI(self):
         self.show_initial_prompt()
-        
-        # Create the main layout
         main_layout = QVBoxLayout()
-
-        # Add the header widget with the background image
         header = HeaderWidget(resource_path(os.path.join('images', MAIN_MENU_IMAGE)), self)
         main_layout.addWidget(header)
 
-        # Create the central widget layout
         layout = QGridLayout()
-        layout.setContentsMargins(20, 20, 20, 20)  # Add margins
-        layout.setSpacing(15)  # Add spacing between elements
-
-        # Define a font for buttons and labels
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
         font = QFont("Arial", 12)
 
         self.label = QLabel("What would you like to do?", self)
@@ -137,7 +121,8 @@ class XeniaManager(QMainWindow):
             ("Toggle Auto Launch", self.toggle_auto_launch),
             ("Add New Game", self.add_new_game),
             ("Open Games Config", self.open_games_config),
-            ("Open SaveData Folder", self.open_save_data_folder)
+            ("Open SaveData Folder", self.open_save_data_folder),
+            ("Open Patches Folder", self.open_patches_folder)
         ]
 
         for i, (text, func) in enumerate(buttons, start=1):
@@ -155,17 +140,27 @@ class XeniaManager(QMainWindow):
         self.setCentralWidget(central_widget)
 
     def open_save_data_folder(self):
-        if not os.path.isdir(SAVE_DATA_DIR):
-            os.makedirs(SAVE_DATA_DIR)
-            QMessageBox.information(self, "Info", f"The folder {SAVE_DATA_DIR} has been created.")
-        os.startfile(SAVE_DATA_DIR)
+        self._open_folder(SAVE_DATA_DIR)
+
+    def open_patches_folder(self):
+        patches_dir = resource_path('Patches')
+        self._open_folder(patches_dir)
+
+    def _open_folder(self, directory):
+        if not os.path.isdir(directory):
+            os.makedirs(directory)
+            QMessageBox.information(self, "Info", f"The folder {directory} has been created.")
+        os.startfile(directory)
     
     def open_games_config(self):
-        if os.path.isfile(CONFIG_FILE):
-            os.startfile(CONFIG_FILE)
-            QMessageBox.information(self, "Info", f"Opening configuration file: {CONFIG_FILE}")
+        self._open_file(CONFIG_FILE, "Games config file not found!")
+
+    def _open_file(self, file_path, error_message):
+        if os.path.isfile(file_path):
+            os.startfile(file_path)
+            QMessageBox.information(self, "Info", f"Opening file: {file_path}")
         else:
-            QMessageBox.warning(self, "Error", "Games config file not found!")
+            QMessageBox.warning(self, "Error", error_message)
 
     def show_initial_prompt(self):
         config = self.load_config()
@@ -183,26 +178,27 @@ class XeniaManager(QMainWindow):
             self.save_config(config)
 
     def toggle_auto_launch(self):
+        self._toggle_config_option("auto_launch", "Auto Launch")
+
+    def _toggle_config_option(self, key, option_name):
         config = self.load_config()
-        config["auto_launch"] = not config.get("auto_launch", False)
+        config[key] = not config.get(key, False)
         self.save_config(config)
-        QMessageBox.information(self, "Info", f"Auto Launch is now {'enabled' if config['auto_launch'] else 'disabled'}.")
+        QMessageBox.information(self, "Info", f"{option_name} is now {'enabled' if config[key] else 'disabled'}.")
 
     def set_auto_launch_delay(self):
-        config = self.load_config()
-        delay, ok = QInputDialog.getInt(self, "Input", "Enter the auto-launch delay in seconds:", value=config.get("auto_launch_delay", 5))
-        if ok:
-            config["auto_launch_delay"] = delay
-            self.save_config(config)
-            QMessageBox.information(self, "Info", f"Auto Launch Delay set to {delay} seconds.")
+        self._set_config_value("auto_launch_delay", "Enter the auto-launch delay in seconds:", 5)
 
     def set_auto_launch_key(self):
+        self._set_config_value("auto_launch_key", "Enter the key for auto-launch:", "f9")
+
+    def _set_config_value(self, key, message, default_value):
         config = self.load_config()
-        key, ok = QInputDialog.getText(self, "Input", "Enter the key for auto-launch:", text=config.get("auto_launch_key", "f9"))
+        value, ok = QInputDialog.getText(self, "Input", message, text=str(config.get(key, default_value)))
         if ok:
-            config["auto_launch_key"] = key
+            config[key] = type(default_value)(value)
             self.save_config(config)
-            QMessageBox.information(self, "Info", f"Auto Launch Key set to '{key}'.")
+            QMessageBox.information(self, "Info", f"{key.replace('_', ' ').title()} set to '{value}'.")
 
     def load_config(self):
         if not os.path.isfile(CONFIG_FILE):
@@ -222,12 +218,10 @@ class XeniaManager(QMainWindow):
             json.dump(config, file, indent=4)
 
     def run_xcopy(self, src, dst):
-        command = ["xcopy", src, dst, "/E", "/I", "/Y"]
-        subprocess.run(command, shell=True)
+        subprocess.run(["xcopy", src, dst, "/E", "/I", "/Y"], shell=True)
 
     def clear_directory(self, directory):
-        command = ["rmdir", "/s", "/q", directory]
-        subprocess.run(command, shell=True)
+        subprocess.run(["rmdir", "/s", "/q", directory], shell=True)
 
     def launch_xenia(self, game_folder, progress_label):
         def update_progress(message):
@@ -243,9 +237,6 @@ class XeniaManager(QMainWindow):
         update_progress("Copying save data to game folder...")
         game_path = resource_path(os.path.join('Core', game_folder))
         xenia_exe = resource_path(os.path.join('Core', game_folder, 'xenia_canary.exe'))
-
-        logging.info(f"Game path: {game_path}")
-        logging.info(f"Xenia executable path: {xenia_exe}")
 
         if not os.path.isfile(xenia_exe):
             logging.error(f"Xenia executable not found: {xenia_exe}")
@@ -271,7 +262,6 @@ class XeniaManager(QMainWindow):
         update_progress("Done.")
 
     def clear_layout(self):
-        # Remove all widgets from the layout
         layout = self.centralWidget().layout()
         if layout is not None:
             while layout.count():
@@ -284,8 +274,8 @@ class XeniaManager(QMainWindow):
         self.clear_layout()
 
         layout = QGridLayout()
-        layout.setContentsMargins(20, 20, 20, 20)  # Add margins
-        layout.setSpacing(15)  # Add spacing between elements
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
         font = QFont("Arial", 12)
 
         self.label = QLabel("Games", self)
@@ -319,8 +309,8 @@ class XeniaManager(QMainWindow):
         self.clear_layout()
 
         layout = QGridLayout()
-        layout.setContentsMargins(20, 20, 20, 20)  # Add margins
-        layout.setSpacing(15)  # Add spacing between elements
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
         font = QFont("Arial", 12)
 
         self.label = QLabel(game['name'], self)
@@ -376,8 +366,8 @@ class XeniaManager(QMainWindow):
         self.clear_layout()
 
         layout = QGridLayout()
-        layout.setContentsMargins(20, 20, 20, 20)  # Add margins
-        layout.setSpacing(15)  # Add spacing between elements
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
         font = QFont("Arial", 12)
 
         self.label = QLabel("Extra Options", self)
@@ -404,29 +394,29 @@ class XeniaManager(QMainWindow):
         self.setCentralWidget(container)
 
     def confirm_backup_save_data(self):
-        reply = QMessageBox.question(self, "Confirm", "Are you sure you want to backup save data?", QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-        if reply == QMessageBox.Yes:
-            self.backup_save_data()
+        self._confirm_action("Backup Save Data", "Are you sure you want to backup save data?", self.backup_save_data)
 
     def confirm_restore_save_data(self):
-        reply = QMessageBox.question(self, "Confirm", "Are you sure you want to restore save data?", QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-        if reply == QMessageBox.Yes:
-            self.restore_save_data()
+        self._confirm_action("Restore Save Data", "Are you sure you want to restore save data?", self.restore_save_data)
 
     def confirm_delete_save_backups(self):
-        reply = QMessageBox.question(self, "Confirm", "Are you sure you want to delete save data backups?", QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        self._confirm_action("Delete Save Data Backup", "Are you sure you want to delete save data backups?", self.delete_save_backups)
+
+    def _confirm_action(self, title, message, action):
+        reply = QMessageBox.question(self, "Confirm", message, QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
         if reply == QMessageBox.Yes:
-            self.delete_save_backups()
+            action()
 
     def backup_save_data(self):
-        self.run_xcopy(os.path.join(SAVE_DATA_DIR, 'cache'), os.path.join(BASE_DIR, 'Backups', 'cache'))
-        self.run_xcopy(os.path.join(SAVE_DATA_DIR, 'content'), os.path.join(BASE_DIR, 'Backups', 'content'))
-        QMessageBox.information(self, "Info", "Backup completed!")
+        self._backup_or_restore(SAVE_DATA_DIR, 'Backups', "Backup completed!")
 
     def restore_save_data(self):
-        self.run_xcopy(os.path.join(BASE_DIR, 'Backups', 'cache'), os.path.join(SAVE_DATA_DIR, 'cache'))
-        self.run_xcopy(os.path.join(BASE_DIR, 'Backups', 'content'), os.path.join(SAVE_DATA_DIR, 'content'))
-        QMessageBox.information(self, "Info", "Restore completed!")
+        self._backup_or_restore('Backups', SAVE_DATA_DIR, "Restore completed!")
+
+    def _backup_or_restore(self, src_dir, dst_dir, success_message):
+        self.run_xcopy(os.path.join(src_dir, 'cache'), os.path.join(BASE_DIR, dst_dir, 'cache'))
+        self.run_xcopy(os.path.join(src_dir, 'content'), os.path.join(BASE_DIR, dst_dir, 'content'))
+        QMessageBox.information(self, "Info", success_message)
 
     def update_xenia(self):
         message = ("This will download and update Xenia to the latest version from the repository.\n"
@@ -435,9 +425,9 @@ class XeniaManager(QMainWindow):
                    "- The latest version will be fetched from https://github.com/xenia-canary/xenia-canary.\n"
                    "- Existing Xenia files will be replaced with the new ones.\n"
                    "- Your game data will not be affected.")
-        reply = QMessageBox.question(self, "Update Xenia", message, QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-        if reply != QMessageBox.Yes:
-            return
+        self._confirm_action("Update Xenia", message, self._update_xenia_files)
+
+    def _update_xenia_files(self):
         self.initialize_directories()
         repo_url = "https://api.github.com/repos/xenia-canary/xenia-canary/releases/latest"
         response = requests.get(repo_url)
@@ -468,18 +458,17 @@ class XeniaManager(QMainWindow):
         QMessageBox.information(self, "Info", "Update completed! - Core & Resources Only - Your games have not been updated!")
 
     def update_patches(self):
-        patches_dir = resource_path('Patches')
-        temp_extract_dir = resource_path('TempPatches')
-
         message = ("This will remove all current patches and download new ones from the repository.\n"
                    "Do you want to continue?\n\n"
                    "Details:\n"
                    "- Existing patches will be deleted.\n"
                    "- New patches will be downloaded from https://github.com/xenia-canary/game-patches.\n"
                    "- The process might take a few minutes depending on your internet connection.")
-        reply = QMessageBox.question(self, "Update Patches", message, QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-        if reply != QMessageBox.Yes:
-            return
+        self._confirm_action("Update Patches", message, self._update_patches_files)
+
+    def _update_patches_files(self):
+        patches_dir = resource_path('Patches')
+        temp_extract_dir = resource_path('TempPatches')
 
         if os.path.exists(patches_dir):
             self.clear_directory(patches_dir)
@@ -563,11 +552,7 @@ class XeniaManager(QMainWindow):
 
     def edit_config(self, game_folder):
         toml_path = os.path.join(CORE_DIR, game_folder, TOML_CONFIG_FILE)
-        if os.path.isfile(toml_path):
-            os.startfile(toml_path)  # This works on Windows. Use an appropriate method for other OS.
-            QMessageBox.information(self, "Info", f"Opening configuration file: {toml_path}")
-        else:
-            QMessageBox.warning(self, "Error", "You must launch Xenia at least once to have a config file!")
+        self._open_file(toml_path, "You must launch Xenia at least once to have a config file!")
 
     def initialize_directories(self):
         xenia_path = resource_path(os.path.join('Core', 'Xenia'))
