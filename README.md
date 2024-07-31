@@ -24,26 +24,29 @@ Version 2 of my save manager tool.
 
 Created for personal use primarily.
 
-Main Menu:
+**Main Menu:**
 
-![image](https://github.com/user-attachments/assets/a941fe34-3b4a-44ad-a766-98b58791fdd5)
+![image](https://github.com/user-attachments/assets/ed485199-9b8d-4865-a30f-10e9c02080be)
 
-Game Menu:
+**Games Section:**
 
-![Games Menu](https://github.com/user-attachments/assets/6548c98e-db7e-4bf4-8e03-130073f2dc87)
+![image](https://github.com/user-attachments/assets/96f709a4-f185-4482-8a73-70d46b3747f0)
 
-Game Options Menu:
+**Updated Help:**
 
-![Game Options](https://github.com/user-attachments/assets/fabafc50-14ea-4485-b6b6-9c583b12a632)
+![image](https://github.com/user-attachments/assets/3c14a662-4197-45c7-93d9-0f09c9ee2bbb)
 
-Extra Options:
+**Extra Options:**
 
-![Extra Options](https://github.com/user-attachments/assets/7afdfc31-b83e-40aa-96d8-3b11e2f6e7bf)
+![image](https://github.com/user-attachments/assets/9b9119d2-056b-4b41-aa9a-67536d85fbc3)
 
-Help:
+**Config:**
 
-![Help](https://github.com/user-attachments/assets/5fb09aad-56d2-4a86-969e-2b0c0174a2ab)
+_Edit Config:_
 
-Config:
+![image](https://github.com/user-attachments/assets/97938777-4a47-495f-84bf-62af74ea1d23)
 
-![Config](https://github.com/user-attachments/assets/369704b7-1e4f-47b7-893f-108dea2360a0)
+_Config File:_
+
+![image](https://github.com/user-attachments/assets/e221fadd-4725-49a7-bc2a-7c0ada72bf3c)
+
