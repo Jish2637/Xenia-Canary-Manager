@@ -1,20 +1,21 @@
-import os
 import io
+import os
+import sys
 import subprocess
 import requests
 import zipfile
 import json
 import shutil
 import logging
-import sys
 import time
 import threading
 import pyautogui
-
+import qtawesome as qta
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QMessageBox, QInputDialog,
-                             QLabel, QVBoxLayout, QPushButton, QWidget, QFileDialog, QGridLayout)
+                             QLabel, QVBoxLayout, QPushButton, QWidget, QFileDialog, QGridLayout,
+                             QProgressBar, QGroupBox)
 from PyQt5.QtGui import QPixmap, QPalette, QBrush, QFont
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
 
 def resource_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller """
@@ -34,6 +35,32 @@ TOML_CONFIG_FILE = 'xenia-canary.config.toml'
 DEFAULT_CONFIG_FILE = resource_path('defaultconfig.toml')
 IMAGES_DIR = resource_path('images')
 MAIN_MENU_IMAGE = "main_menu_background.jpg"
+
+class CopyThread(QThread):
+    progress = pyqtSignal(int)
+    update_text = pyqtSignal(str)
+
+    def __init__(self, src, dst, parent=None):
+        super().__init__(parent)
+        self.src = src
+        self.dst = dst  # Properly assign self.dst
+
+    def run(self):
+        total_files = sum([len(files) for r, d, files in os.walk(self.src)])
+        copied_files = 0
+
+        for root, dirs, files in os.walk(self.src):
+            for file in files:
+                src_file = os.path.join(root, file)
+                dst_file = os.path.join(self.dst, os.path.relpath(src_file, self.src))
+                dst_dir = os.path.dirname(dst_file)
+                if not os.path.exists(dst_dir):
+                    os.makedirs(dst_dir)
+                shutil.copy2(src_file, dst_file)
+                copied_files += 1
+                progress_percent = int((copied_files / total_files) * 100)
+                self.progress.emit(progress_percent)
+                self.update_text.emit(f"Save Data Transfer Complete: {copied_files}/{total_files} files.")
 
 class HeaderWidget(QWidget):
     def __init__(self, image_path, parent=None):
@@ -65,13 +92,14 @@ class GameItemWidget(QWidget):
     def initUI(self):
         layout = QVBoxLayout()
         buttons = [
-            ("Launch", self.launch_game),
-            ("Edit Config", self.edit_config),
-            ("Remove", self.remove_game),
-            ("Open Folder", self.open_folder)
+            ("Launch", "fa.play", self.launch_game),
+            ("Edit Config", "fa.edit", self.edit_config),
+            ("Remove", "fa.trash", self.remove_game),
+            ("Open Folder", "fa.folder-open-o", self.open_folder)
         ]
-        for text, func in buttons:
+        for text, icon, func in buttons:
             button = QPushButton(text, self)
+            button.setIcon(qta.icon(icon))
             button.clicked.connect(func)
             layout.addWidget(button)
         self.setLayout(layout)
@@ -106,31 +134,27 @@ class XeniaManager(QMainWindow):
         layout.setSpacing(15)
         font = QFont("Arial", 12)
 
-        self.label = QLabel("What would you like to do?", self)
+        self.label = QLabel("Main Menu", self)
         self.label.setFont(font)
         layout.addWidget(self.label, 0, 0, 1, 2)
 
-        buttons = [
-            ("Games", self.games_menu),
-            ("Launch Xenia Canary With Default Settings", lambda: self.launch_game("Xenia")),
-            ("Edit Config", lambda: self.edit_config("Xenia")),
-            ("Launch Xenia Canary With 4k Settings", lambda: self.launch_game("4k\\Xenia")),
-            ("Edit Config", lambda: self.edit_config("4k\\Xenia")),
-            ("Help", self.help_menu),
-            ("Extra Options", self.extra_options),
-            ("Toggle Auto Launch", self.toggle_auto_launch),
-            ("Add New Game", self.add_new_game),
-            ("Open Games Config", self.open_games_config),
-            ("Open SaveData Folder", self.open_save_data_folder),
-            ("Open Patches Folder", self.open_patches_folder)
+        # Simplified main menu with fewer options
+        main_buttons = [
+            ("Games", "fa.gamepad", self.games_menu),
+            ("Launch Xenia", "fa.play", self.launch_xenia_menu),
+            ("Edit Config", "fa.edit", self.edit_config_menu),
+            ("Help", "fa.question-circle", self.help_menu),
+            ("Extra Options", "fa.cogs", self.extra_options),
         ]
 
-        for i, (text, func) in enumerate(buttons, start=1):
+        for i, (text, icon, func) in enumerate(main_buttons, start=1):
             button = QPushButton(text, self)
             button.setFont(font)
+            button.setIcon(qta.icon(icon))
             button.clicked.connect(func)
             layout.addWidget(button, i, 0, 1, 2)
 
+        # Container and central widget setup
         container = QWidget()
         container.setLayout(layout)
         main_layout.addWidget(container)
@@ -138,6 +162,65 @@ class XeniaManager(QMainWindow):
         central_widget = QWidget()
         central_widget.setLayout(main_layout)
         self.setCentralWidget(central_widget)
+
+    def launch_xenia_menu(self):
+        self.clear_layout()
+
+        layout = QGridLayout()
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+        font = QFont("Arial", 12)
+
+        self.label = QLabel("Launch Xenia", self)
+        self.label.setFont(font)
+        layout.addWidget(self.label, 0, 0, 1, 2)
+
+        launch_buttons = [
+            ("Launch Xenia Canary", "fa.play", lambda: self.launch_game("Xenia")),
+            ("Launch Xenia Canary with 4K Settings", "fa.play", lambda: self.launch_game("4k\\Xenia")),
+            ("Back", "fa.arrow-left", self.initUI)
+        ]
+
+        for i, (text, icon, func) in enumerate(launch_buttons, start=1):
+            button = QPushButton(text, self)
+            button.setFont(font)
+            button.setIcon(qta.icon(icon))
+            button.clicked.connect(func)
+            layout.addWidget(button, i, 0, 1, 2)
+
+        container = QWidget()
+        container.setLayout(layout)
+        self.setCentralWidget(container)
+
+    def edit_config_menu(self):
+        self.clear_layout()
+
+        layout = QGridLayout()
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+        font = QFont("Arial", 12)
+
+        self.label = QLabel("Edit Config", self)
+        self.label.setFont(font)
+        layout.addWidget(self.label, 0, 0, 1, 2)
+
+        config_buttons = [
+            ("Edit Xenia Config", "fa.edit", lambda: self.edit_config("Xenia")),
+            ("Edit 4K Xenia Config", "fa.edit", lambda: self.edit_config("4k\\Xenia")),
+            ("Edit Xenia Manager Config", "fa.edit", self.open_games_config),
+            ("Back", "fa.arrow-left", self.initUI)
+        ]
+
+        for i, (text, icon, func) in enumerate(config_buttons, start=1):
+            button = QPushButton(text, self)
+            button.setFont(font)
+            button.setIcon(qta.icon(icon))
+            button.clicked.connect(func)
+            layout.addWidget(button, i, 0, 1, 2)
+
+        container = QWidget()
+        container.setLayout(layout)
+        self.setCentralWidget(container)
 
     def open_save_data_folder(self):
         self._open_folder(SAVE_DATA_DIR)
@@ -207,6 +290,9 @@ class XeniaManager(QMainWindow):
                 "auto_launch": False,
                 "auto_launch_delay": 2,
                 "auto_launch_key": "f9",
+                "auto_fullscreen": False,
+                "auto_fullscreen_delay": 2,
+                "auto_fullscreen_key": "f11",
                 "games": []
             }
             self.save_config(config)
@@ -233,6 +319,16 @@ class XeniaManager(QMainWindow):
             if config.get("auto_launch", True):
                 time.sleep(config.get("auto_launch_delay", 10))
                 pyautogui.press(config.get("auto_launch_key", "f9"))
+            if config.get("auto_fullscreen", False):
+                time.sleep(config.get("auto_fullscreen_delay", 10))
+                pyautogui.press(config.get("auto_fullscreen_key", "f11"))
+
+        progress_bar = QProgressBar(self)
+        progress_bar.setMaximum(100)
+
+        layout = self.centralWidget().layout()
+        layout.addWidget(progress_bar)
+        layout.addWidget(progress_label)
 
         update_progress("Copying save data to game folder...")
         game_path = resource_path(os.path.join('Core', game_folder))
@@ -243,9 +339,13 @@ class XeniaManager(QMainWindow):
             update_progress(f"Error: Xenia executable not found: {xenia_exe}")
             return
 
-        self.run_xcopy(SAVE_DATA_DIR, game_path)
-        update_progress("Launching Xenia...")
+        copy_thread = CopyThread(SAVE_DATA_DIR, game_path)
+        copy_thread.progress.connect(progress_bar.setValue)
+        copy_thread.update_text.connect(update_progress)
+        copy_thread.start()
+        copy_thread.wait()  # Wait for the thread to finish
 
+        update_progress("Launching Xenia...")
         threading.Thread(target=auto_press_key).start()
 
         try:
@@ -255,8 +355,18 @@ class XeniaManager(QMainWindow):
             update_progress(f"Error launching Xenia: {e}")
 
         update_progress("Copying save data back...")
-        self.run_xcopy(os.path.join(game_path, 'cache'), os.path.join(SAVE_DATA_DIR, 'cache'))
-        self.run_xcopy(os.path.join(game_path, 'content'), os.path.join(SAVE_DATA_DIR, 'content'))
+        copy_thread = CopyThread(os.path.join(game_path, 'cache'), os.path.join(SAVE_DATA_DIR, 'cache'))
+        copy_thread.progress.connect(progress_bar.setValue)
+        copy_thread.update_text.connect(update_progress)
+        copy_thread.start()
+        copy_thread.wait()
+
+        copy_thread = CopyThread(os.path.join(game_path, 'content'), os.path.join(SAVE_DATA_DIR, 'content'))
+        copy_thread.progress.connect(progress_bar.setValue)
+        copy_thread.update_text.connect(update_progress)
+        copy_thread.start()
+        copy_thread.wait()
+
         self.clear_directory(os.path.join(game_path, 'cache'))
         self.clear_directory(os.path.join(game_path, 'content'))
         update_progress("Done.")
@@ -280,7 +390,14 @@ class XeniaManager(QMainWindow):
 
         self.label = QLabel("Games", self)
         self.label.setFont(font)
-        layout.addWidget(self.label, 0, 0, 1, 2)
+        layout.addWidget(self.label, 0, 1, 1, 2)  # Adjusted to make space for the add button
+
+        # Add Game button in the top-left corner
+        add_game_button = QPushButton("Add Game", self)
+        add_game_button.setFont(font)
+        add_game_button.setIcon(qta.icon("fa.plus"))
+        add_game_button.clicked.connect(self.add_new_game)
+        layout.addWidget(add_game_button, 0, 0)
 
         config = self.load_config()
         games = config.get('games', [])
@@ -288,18 +405,20 @@ class XeniaManager(QMainWindow):
         if not games:
             no_games_label = QLabel("No games found. Please add a new game.", self)
             no_games_label.setFont(font)
-            layout.addWidget(no_games_label, 1, 0, 1, 2)
+            layout.addWidget(no_games_label, 1, 0, 1, 3)
         else:
             for i, game in enumerate(games, start=1):
                 game_button = QPushButton(game['name'], self)
                 game_button.setFont(font)
+                game_button.setIcon(qta.icon("fa.gamepad"))
                 game_button.clicked.connect(lambda _, g=game: self.show_game_options(g))
-                layout.addWidget(game_button, i, 0, 1, 2)
+                layout.addWidget(game_button, i + 1, 0, 1, 3)  # Adjust the row index
 
         back_button = QPushButton("Back", self)
         back_button.setFont(font)
+        back_button.setIcon(qta.icon("fa.arrow-left"))
         back_button.clicked.connect(self.initUI)
-        layout.addWidget(back_button, len(games) + 1, 0, 1, 2)
+        layout.addWidget(back_button, len(games) + 2, 0, 1, 3)  # Adjust the row index
 
         container = QWidget()
         container.setLayout(layout)
@@ -318,23 +437,24 @@ class XeniaManager(QMainWindow):
         layout.addWidget(self.label, 0, 0, 1, 2)
 
         buttons = [
-            ("Launch", lambda: self.launch_game(game['path'])),
-            ("Edit Config", lambda: self.edit_config(game['path'])),
-            ("Remove", lambda: self.remove_game(game)),
-            ("Open Folder", lambda: self.open_folder(game['path'])),
-            ("Back", self.games_menu)
+            ("Launch", "fa.play", lambda: self.launch_game(game['path'])),
+            ("Edit Config", "fa.edit", lambda: self.edit_config(game['path'])),
+            ("Remove", "fa.trash", lambda: self.remove_game(game)),
+            ("Open Folder", "fa.folder-open-o", lambda: self.open_folder(game['path'])),
+            ("Back", "fa.arrow-left", self.games_menu)
         ]
 
-        for i, (text, func) in enumerate(buttons, start=1):
+        for i, (text, icon, func) in enumerate(buttons, start=1):
             button = QPushButton(text, self)
             button.setFont(font)
+            button.setIcon(qta.icon(icon))
             button.clicked.connect(func)
             layout.addWidget(button, i, 0, 1, 2)
 
         container = QWidget()
         container.setLayout(layout)
         self.setCentralWidget(container)
-  
+
     def open_folder(self, game_path):
         folder_path = os.path.join(CORE_DIR, game_path)
         if os.path.isdir(folder_path):
@@ -355,39 +475,108 @@ class XeniaManager(QMainWindow):
                                     "Click File - Open\n\n"
                                     "Select the default.xex/iso file of the game you selected to play from within your games folder\n\n"
                                     "Emulator will now update the correct path for the file\n\n"
-                                    "You can now use F9 to launch the game from now on after selecting your choice on the games menu\n\n"
+                                    "\n\n"
                                     "Only 1 Backup is kept at a time\n\n"
                                     "You should copy your cache and content folders into SaveData & the app will manage your save data across games.\n\n"
                                     "Auto launch will only work once you have played a game at least once using the app.\n\n" 
-                                    "(Auto launch attempts to press F9 after starting Xenia - Configurable via games_config.json)\n\n"
+                                    "When updating Xenia nothing is copied to your custom games folders, you must update these. \n\nYou can use the `Open folder` option to easily find your games xenia_canary.exe \n\n"
                                     "App is still WIP")
+
+    def toggle_auto_fullscreen(self):
+        self._toggle_config_option("auto_fullscreen", "Auto Fullscreen")
+
+    def set_auto_fullscreen_key(self):
+        self._set_config_value("auto_fullscreen_key", "Enter the key for auto-fullscreen:", "f11")
+    
+    def set_auto_fullscreen_delay(self):
+        self._set_config_value("auto_fullscreen_delay", "Enter the fullscreen delay in seconds:", 2)
 
     def extra_options(self):
         self.clear_layout()
 
-        layout = QGridLayout()
+        layout = QVBoxLayout()
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(15)
         font = QFont("Arial", 12)
 
         self.label = QLabel("Extra Options", self)
         self.label.setFont(font)
-        layout.addWidget(self.label, 0, 0, 1, 2)
+        layout.addWidget(self.label)
 
-        buttons = [
-            ("Backup Save Data", self.confirm_backup_save_data),
-            ("Restore Save Data", self.confirm_restore_save_data),
-            ("Update Xenia", self.update_xenia),
-            ("Update Patches", self.update_patches),
-            ("Delete Save Data Backup", self.confirm_delete_save_backups),
-            ("Back", self.initUI)
-        ]
-
-        for i, (text, func) in enumerate(buttons, start=1):
+        # Method to create buttons with icons
+        def create_button(text, icon_name, func):
             button = QPushButton(text, self)
             button.setFont(font)
+            button.setIcon(qta.icon(icon_name))
             button.clicked.connect(func)
-            layout.addWidget(button, i, 0, 1, 2)
+            return button
+
+        # Backup/Restore Section
+        backup_restore_section = QGroupBox("Backup/Restore")
+        backup_restore_layout = QVBoxLayout()
+        backup_restore_buttons = [
+            ("Backup Save Data", "fa.save", self.confirm_backup_save_data),
+            ("Restore Save Data", "fa.history", self.confirm_restore_save_data),
+            ("Delete Save Data Backup", "fa.trash", self.confirm_delete_save_backups),
+        ]
+        for text, icon, func in backup_restore_buttons:
+            backup_restore_layout.addWidget(create_button(text, icon, func))
+        backup_restore_section.setLayout(backup_restore_layout)
+        layout.addWidget(backup_restore_section)
+
+        # Update Section
+        update_section = QGroupBox("Update")
+        update_layout = QVBoxLayout()
+        update_buttons = [
+            ("Update Xenia", "fa.download", self.update_xenia),
+            ("Update Patches", "fa.download", self.update_patches),
+        ]
+        for text, icon, func in update_buttons:
+            update_layout.addWidget(create_button(text, icon, func))
+        update_section.setLayout(update_layout)
+        layout.addWidget(update_section)
+
+        # Auto Launch Section
+        auto_launch_section = QGroupBox("Auto Launch")
+        auto_launch_layout = QVBoxLayout()
+        auto_launch_buttons = [
+            ("Toggle Auto Launch", "fa.toggle-on", self.toggle_auto_launch),
+            ("Set Auto Launch Delay", "fa.clock-o", self.set_auto_launch_delay),
+            ("Set Auto Launch Key", "fa.keyboard-o", self.set_auto_launch_key),
+        ]
+        for text, icon, func in auto_launch_buttons:
+            auto_launch_layout.addWidget(create_button(text, icon, func))
+        auto_launch_section.setLayout(auto_launch_layout)
+        layout.addWidget(auto_launch_section)
+
+        # Auto Fullscreen Section
+        auto_fullscreen_section = QGroupBox("Auto Fullscreen")
+        auto_fullscreen_layout = QVBoxLayout()
+        auto_fullscreen_buttons = [
+            ("Toggle Auto Fullscreen", "fa.toggle-on", self.toggle_auto_fullscreen),
+            ("Set Auto Fullscreen Delay", "fa.clock-o", self.set_auto_fullscreen_delay),
+            ("Set Auto Fullscreen Key", "fa.keyboard-o", self.set_auto_fullscreen_key),
+        ]
+        for text, icon, func in auto_fullscreen_buttons:
+            auto_fullscreen_layout.addWidget(create_button(text, icon, func))
+        auto_fullscreen_section.setLayout(auto_fullscreen_layout)
+        layout.addWidget(auto_fullscreen_section)
+
+        # Folder Access Section
+        folder_access_section = QGroupBox("Folder Access")
+        folder_access_layout = QVBoxLayout()
+        folder_access_buttons = [
+            ("Open SaveData Folder", "fa.folder-open-o", self.open_save_data_folder),
+            ("Open Patches Folder", "fa.folder-open-o", self.open_patches_folder),
+        ]
+        for text, icon, func in folder_access_buttons:
+            folder_access_layout.addWidget(create_button(text, icon, func))
+        folder_access_section.setLayout(folder_access_layout)
+        layout.addWidget(folder_access_section)
+
+        # Back Button
+        back_button = create_button("Back", "fa.arrow-left", self.initUI)
+        layout.addWidget(back_button)
 
         container = QWidget()
         container.setLayout(layout)
@@ -424,7 +613,7 @@ class XeniaManager(QMainWindow):
                    "Details:\n"
                    "- The latest version will be fetched from https://github.com/xenia-canary/xenia-canary.\n"
                    "- Existing Xenia files will be replaced with the new ones.\n"
-                   "- Your game data will not be affected.")
+                   "- Your game data and added games will not be affected.")
         self._confirm_action("Update Xenia", message, self._update_xenia_files)
 
     def _update_xenia_files(self):
@@ -511,7 +700,7 @@ class XeniaManager(QMainWindow):
         new_id = str(len(config['games']) + 1)
         name, ok1 = QInputDialog.getText(self, "Input", "Enter the game name\n\n(This can be anything you want):")
         path, ok2 = QInputDialog.getText(self, "Input", "Enter a name for your game folder\n\n(One will be created if it doesnt exist):")
-        image_path, ok3 = QInputDialog.getText(self, "Input", "Enter the a image name\n\n(Your image should be placed in images folder, enter none for no image):")
+        image_path, ok3 = QInputDialog.getText(self, "Input", "Enter the image name with extension\n\n(Your image should be placed in images folder, enter none for no image):")
 
         if ok1 and ok2 and ok3 and name and path and image_path:
             game_path = os.path.join(CORE_DIR, path)
@@ -525,6 +714,7 @@ class XeniaManager(QMainWindow):
             config['games'].append({"id": new_id, "name": name, "path": path, "image_path": image_path})
             self.save_config(config)
             QMessageBox.information(self, "Success", "Game added successfully!")
+            self.games_menu()  # Refresh the games menu
         else:
             QMessageBox.critical(self, "Error", "Invalid input!")
 
