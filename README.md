@@ -26,7 +26,7 @@ Created for personal use primarily.
 
 Main Menu:
 
-![Main Menu](https://github.com/user-attachments/assets/82b58d96-6491-4b3d-8388-e58c3cd98c73)
+![image](https://github.com/user-attachments/assets/a941fe34-3b4a-44ad-a766-98b58791fdd5)
 
 Game Menu:
 
