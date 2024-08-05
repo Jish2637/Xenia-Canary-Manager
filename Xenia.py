@@ -178,6 +178,7 @@ class XeniaManager(QMainWindow):
         launch_buttons = [
             ("Launch Xenia Canary", "fa.play", lambda: self.launch_game("Xenia")),
             ("Launch Xenia Canary with 4K Settings", "fa.play", lambda: self.launch_game("4k\\Xenia")),
+            ("Launch Normal Xenia", "fa.play", lambda: self.launch_normal_xenia("NonCanaryXenia")),
             ("Back", "fa.arrow-left", self.initUI)
         ]
 
@@ -319,7 +320,7 @@ class XeniaManager(QMainWindow):
             if config.get("auto_launch", True):
                 time.sleep(config.get("auto_launch_delay", 10))
                 pyautogui.press(config.get("auto_launch_key", "f9"))
-            if config.get("auto_fullscreen", False):
+            if config.get("auto_fullscreen", True):
                 time.sleep(config.get("auto_fullscreen_delay", 10))
                 pyautogui.press(config.get("auto_fullscreen_key", "f11"))
 
@@ -369,6 +370,54 @@ class XeniaManager(QMainWindow):
 
         self.clear_directory(os.path.join(game_path, 'cache'))
         self.clear_directory(os.path.join(game_path, 'content'))
+        update_progress("Done.")
+
+    def launch_normal_xenia(self, game_folder):
+        def update_progress(message):
+            progress_label.setText(message)
+            progress_label.repaint()
+
+        def auto_press_key():
+            config = self.load_config()
+            if config.get("auto_launch", True):
+                time.sleep(config.get("auto_launch_delay", 10))
+                pyautogui.press(config.get("auto_launch_key", "f9"))
+            if config.get("auto_fullscreen", True):
+                time.sleep(config.get("auto_fullscreen_delay", 10))
+                pyautogui.press(config.get("auto_fullscreen_key", "f11"))
+
+        progress_label = QLabel("", self)
+        progress_label.setAlignment(Qt.AlignCenter)
+        progress_bar = QProgressBar(self)
+        progress_bar.setMaximum(100)
+
+        layout = self.centralWidget().layout()
+        layout.addWidget(progress_bar)
+        layout.addWidget(progress_label)
+
+        update_progress("Preparing to launch Xenia...")
+        game_path = resource_path(os.path.join('Core', game_folder))
+        xenia_exe = resource_path(os.path.join('Core', game_folder, 'xenia.exe'))
+
+        if not os.path.isfile(xenia_exe):
+            logging.error(f"Xenia executable not found: {xenia_exe}")
+            update_progress(f"Error: Xenia executable not found: {xenia_exe}")
+            QMessageBox.critical(self, "Error", f"Xenia executable not found: {xenia_exe}")
+            return
+
+        try:
+            subprocess.Popen([xenia_exe], cwd=game_path)
+            threading.Thread(target=auto_press_key).start()
+            update_progress("Xenia launched successfully.")
+        except FileNotFoundError as e:
+            logging.error(f"Error launching Xenia: {e}")
+            update_progress(f"Error launching Xenia: {e}")
+            QMessageBox.critical(self, "Error", f"Error launching Xenia: {e}")
+        except Exception as e:
+            logging.error(f"Unexpected error: {e}")
+            update_progress(f"Unexpected error: {e}")
+            QMessageBox.critical(self, "Error", f"Unexpected error: {e}")
+
         update_progress("Done.")
 
     def clear_layout(self):
@@ -530,6 +579,7 @@ class XeniaManager(QMainWindow):
         update_buttons = [
             ("Update Xenia", "fa.download", self.update_xenia),
             ("Update Patches", "fa.download", self.update_patches),
+            ("Update Non-Canary Xenia", "fa.download", self.update_non_canary_xenia),
         ]
         for text, icon, func in update_buttons:
             update_layout.addWidget(create_button(text, icon, func))
@@ -645,6 +695,45 @@ class XeniaManager(QMainWindow):
         self.run_xcopy(update_dir, os.path.join(BASE_DIR, 'Resources'))
 
         QMessageBox.information(self, "Info", "Update completed! - Core & Resources Only - Your games have not been updated!")
+        
+    def update_non_canary_xenia(self):
+        message = ("This will download and update Non Canary Xenia to the latest version from the repository.\n"
+                   "Do you want to continue?\n\n"
+                   "Details:\n"
+                   "- The latest version will be fetched from https://api.github.com/repos/xenia-project/release-builds-windows/releases/latest \n"
+                   "- Existing Non Canary Xenia files will be replaced with the new ones.\n"
+                   "- Your game data and added games will not be affected.")
+        self._confirm_action("Update Non Canary Xenia", message, self._update_non_canary_xenia_files)
+        
+    def _update_non_canary_xenia_files(self):
+        self.initialize_directories()
+        repo_url = "https://api.github.com/repos/xenia-project/release-builds-windows/releases/latest"
+        response = requests.get(repo_url)
+        response.raise_for_status()
+        release_info = response.json()
+
+        # Fetch the specific asset named 'xenia_master.zip'
+        asset = next((asset for asset in release_info['assets'] if asset['name'] == 'xenia_master.zip'), None)
+        if not asset:
+            QMessageBox.critical(self, "Error", "No 'xenia_master.zip' file found in the latest release assets.")
+            return
+
+        zip_url = asset['browser_download_url']
+        response = requests.get(zip_url)
+        response.raise_for_status()
+
+        update_dir = os.path.join(BASE_DIR, 'Update', 'NonCanaryDepo')
+        if os.path.exists(update_dir):
+            self.clear_directory(update_dir)
+        os.makedirs(update_dir, exist_ok=True)
+
+        with zipfile.ZipFile(io.BytesIO(response.content)) as z:
+            z.extractall(update_dir)
+
+        self.run_xcopy(update_dir, os.path.join(CORE_DIR, 'NonCanaryXenia'))
+        self.run_xcopy(update_dir, os.path.join(BASE_DIR, 'NonCanaryXResources'))
+
+        QMessageBox.information(self, "Info", "Update completed! - Non Canary Core & Non Canary Resources Only - Your games have not been updated!")
 
     def update_patches(self):
         message = ("This will remove all current patches and download new ones from the repository.\n"
