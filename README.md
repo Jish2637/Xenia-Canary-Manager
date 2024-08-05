@@ -1,4 +1,4 @@
-I have created a save manager for Xenia Canary.
+I have created a save/game manager for Xenia Canary.
 
 **Features:**
 
@@ -20,7 +20,7 @@ You just need to copy your cache and content folders into SaveData & the app wil
 
 Auto launch will only work once you have opened a game at least once using the app. (It attempts to press F9 after starting Xenia - Configurable via games_config.json)
 
-Version 2 of my save manager tool.
+Version 2.3 of my save/game manager tool.
 
 Created for personal use primarily.
 
@@ -32,13 +32,17 @@ Created for personal use primarily.
 
 ![image](https://github.com/user-attachments/assets/96f709a4-f185-4482-8a73-70d46b3747f0)
 
+**Launch Xenia Menu:**
+
+![image](https://github.com/user-attachments/assets/e85ec4cc-4f29-40a7-a06c-1c3273c0731f)
+
 **Updated Help:**
 
 ![image](https://github.com/user-attachments/assets/3c14a662-4197-45c7-93d9-0f09c9ee2bbb)
 
 **Extra Options:**
 
-![image](https://github.com/user-attachments/assets/9b9119d2-056b-4b41-aa9a-67536d85fbc3)
+![image](https://github.com/user-attachments/assets/6e4503fc-28ae-4266-b404-bebc67f2959a)
 
 **Config:**
 
@@ -50,3 +54,6 @@ _Config File:_
 
 ![image](https://github.com/user-attachments/assets/e221fadd-4725-49a7-bc2a-7c0ada72bf3c)
 
+_Blank Config File:_
+
+![image](https://github.com/user-attachments/assets/968e2a15-e36f-4814-ae33-a2d41f3dacab)
